@@ -333,10 +333,21 @@ function renderFuel(){
   </div>
   ${f.mi?`<div class="desc" style="margin-top:9px">Long run: ${f.mi} mi — that's why today runs hot. Eat it all.</div>`:""}
   <div class="desc" style="margin-top:7px">${f.note}</div></div>`;
+  // tomorrow-aware nudge
+  const tm = new Date(viewDate); tm.setDate(tm.getDate()+1);
+  const tf = fuelFor(tm);
+  const tmName = DAYS[(tm.getDay()+6)%7];
+  const bigTomorrow = tf.type.includes("HARD") || tf.type.includes("LONG");
+  const items = checklistFor(dayName);
+  if(bigTomorrow){
+    const what = tf.mi ? `a ${tf.mi}-mile long run` : "a quality run + leg day";
+    h += `<div class="card" style="border-color:#6b4a1c"><div style="font-size:13px;line-height:1.5"><b style="color:var(--orange)">🌙 Tonight, eat for tomorrow:</b> ${tmName} is ${what}. Carb-heavy dinner (rice, pasta, potatoes), extra water, decent bedtime — tomorrow's session is won tonight.</div></div>`;
+    items.push(`Carb-heavy dinner tonight — big day tomorrow (${tmName}: ${what})`);
+  }
   // checklist
   const checks = (DB[dISO] && DB[dISO].__fuel && DB[dISO].__fuel.checks) || {};
   h += `<div class="session-label">Today's checklist</div><div class="card">`;
-  checklistFor(dayName).forEach((item,i)=>{
+  items.forEach((item,i)=>{
     const on = !!checks[i];
     h += `<div class="setrow" style="margin-bottom:9px" onclick="toggleFuel('${dISO}',${i})">
       <button class="done-btn ${on?"on":""}" style="margin-left:0;flex-shrink:0">✓</button>
