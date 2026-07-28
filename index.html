@@ -306,6 +306,7 @@ function renderSummary(){
       <span>${setCount} sets</span><span>🍽️ ${nChecked} fuel checks · ${f.cal.toLocaleString()} cal target</span><span>${daysLeft>0?daysLeft+"d to NYC":"🎉"}</span>
     </div>
   </div>
+  <button class="btn primary" onclick="shareSummary()">📤 Share</button>
   <button class="btn" onclick="go('today')">← Back to Today</button>`;
   return h;
 }
@@ -438,6 +439,29 @@ function finishWorkout(dISO){
   DB[dISO].__day = {finished:true};
   saveDB(DB); tab="summary"; render(); window.scrollTo(0,0);
 }
+function viewSummary(dISO){ viewDate = parseISO(dISO); tab="summary"; render(); window.scrollTo(0,0); }
+function summaryText(){
+  const dISO = iso(viewDate);
+  const dayName = DAYS[(viewDate.getDay()+6)%7];
+  const wkN = Math.min(Math.max(weekOf(viewDate),1),14);
+  const t = tmpl(wkN)[dayName];
+  const day = DB[dISO] || {};
+  let lines = [`🏋️ ${dayName} ${viewDate.getMonth()+1}/${viewDate.getDate()} — Week ${wkN}`, t.label, ""];
+  Object.keys(day).filter(k=>!k.startsWith("__")).forEach(ex=>{
+    const e = day[ex];
+    if(e.cardio && e.cardio.done){ lines.push(`${ex}: ${[e.cardio.dur,e.cardio.split].filter(Boolean).join(" · ")||"done"}${e.note?` ("${e.note}")`:""}`); return; }
+    const sets = (e.sets||[]).filter(s=>s.done);
+    if(sets.length) lines.push(`${ex}: ${fmtSets(sets)}${e.note?` ("${e.note}")`:""}`);
+  });
+  const daysLeft = Math.round((RACE - viewDate)/864e5);
+  lines.push("", `${daysLeft} days to NYC 🗽`);
+  return lines.join("\n");
+}
+function shareSummary(){
+  const txt = summaryText();
+  if(navigator.share){ navigator.share({text: txt}).catch(()=>{}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(txt).then(()=>alertMsg("Copied ✓")); }
+}
 
 // ---------- rest timer (wall-clock anchored: survives tab/app switches) ----------
 const Timer = {
@@ -568,7 +592,10 @@ function renderWeek(){
     h += `<div class="card" onclick="setDate('${dISO}');go('today')" style="cursor:pointer">
       <div class="ex-head"><div><span class="ex-name">${fin?"✅ ":""}${dayName} <span style="color:var(--dim);font-weight:400;font-size:12px">${d.getMonth()+1}/${d.getDate()}</span></span>
       <div class="target">${t.label}</div></div>
-      <div style="font-size:12px;color:${logged?"var(--green)":"var(--dim)"};white-space:nowrap">${logged?logged+" sets ✓":"—"}</div></div></div>`;
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:${logged?"var(--green)":"var(--dim)"};white-space:nowrap">${logged?logged+" sets ✓":"—"}</span>
+        ${logged||fin?`<button class="done-btn" style="margin:0" onclick="event.stopPropagation();viewSummary('${dISO}')">📸</button>`:""}
+      </div></div></div>`;
   }
   return h;
 }
