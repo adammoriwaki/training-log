@@ -470,7 +470,61 @@ function customExercises(){
 function finishWorkout(dISO){
   if(!DB[dISO]) DB[dISO]={};
   DB[dISO].__day = {finished:true};
-  saveDB(DB); tab="summary"; render(); window.scrollTo(0,0);
+  saveDB(DB); syncDay(dISO); tab="summary"; render(); window.scrollTo(0,0);
+}
+
+// ---------- Google Sheet sync ----------
+const SYNC_KEY = KEY+"-sync";
+let syncCfg = {url:"", last:"", lastDay:""};
+try{ syncCfg = Object.assign(syncCfg, JSON.parse(localStorage.getItem(SYNC_KEY)||"{}")); }catch(e){}
+function saveSync(){ try{ localStorage.setItem(SYNC_KEY, JSON.stringify(syncCfg)); }catch(e){} }
+function setSyncUrl(v){ syncCfg.url = (v||"").trim(); saveSync(); }
+
+function rowsForDay(dISO){
+  const d = parseISO(dISO);
+  const dayName = DAYS[(d.getDay()+6)%7];
+  const wkN = Math.min(Math.max(weekOf(d),1),14);
+  const t = dayPlan(wkN, dayName);
+  const grpOf = {};
+  t.items.forEach(it=>{ grpOf[it.ex] = it.grp||""; });
+  const day = DB[dISO] || {};
+  const rows = [];
+  Object.keys(day).filter(k=>!k.startsWith("__")).forEach(ex=>{
+    const e = day[ex];
+    if(e.cardio && e.cardio.done){
+      rows.push({date:dISO, day:dayName, week:wkN, session:t.label, exercise:ex,
+        group:grpOf[ex]||"Cross-training", set:1, weight:"", reps:"",
+        duration:e.cardio.dur||"", split:e.cardio.split||"", note:e.note||""});
+      return;
+    }
+    (e.sets||[]).forEach((s,i)=>{
+      if(!s.done) return;
+      rows.push({date:dISO, day:dayName, week:wkN, session:t.label, exercise:ex,
+        group:grpOf[ex]||"", set:i+1, weight:(s.w===""||s.w==null)?"":s.w,
+        reps:(s.r===""||s.r==null)?"":s.r, duration:"", split:"",
+        note:(i===0 ? (e.note||"") : "")});
+    });
+  });
+  return rows;
+}
+function syncDay(dISO, quiet){
+  if(!syncCfg.url) return false;
+  const rows = rowsForDay(dISO);
+  if(!rows.length){ if(!quiet) alertMsg("Nothing logged to sync"); return false; }
+  try{
+    fetch(syncCfg.url, {method:"POST", mode:"no-cors",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({rows})});
+    syncCfg.last = new Date().toISOString(); syncCfg.lastDay = dISO; saveSync();
+    if(!quiet) alertMsg("Sent to your sheet ✓");
+    return true;
+  }catch(err){ if(!quiet) alertMsg("Sync failed — check the URL"); return false; }
+}
+function syncAll(){
+  if(!syncCfg.url){ alertMsg("Paste your sheet URL first"); return; }
+  const days = Object.keys(DB).sort();
+  let n = 0;
+  days.forEach((d,i)=>{ setTimeout(()=>{ if(syncDay(d,true)) n++; if(i===days.length-1) alertMsg("Sent "+days.length+" days ✓"); }, i*350); });
 }
 function viewSummary(dISO){ viewDate = parseISO(dISO); tab="summary"; render(); window.scrollTo(0,0); }
 function summaryText(){
@@ -801,6 +855,24 @@ function renderData(){
     <div style="margin:14px 4px 6px;font-size:12px;color:var(--dim)">Restore: paste a backup below</div>
     <textarea class="io" id="io" placeholder='{"2026-07-27": ...}'></textarea>
     <button class="btn" onclick="doImport()">📥 Import (merges with existing)</button>`;
+  // ---- sheet sync ----
+  const on = !!syncCfg.url;
+  const when = syncCfg.last ? new Date(syncCfg.last).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}) : null;
+  h += `<div class="session-label">Google Sheet sync</div>
+    <div class="card">
+      <div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-bottom:9px">
+        Every workout you finish gets sent to your Google Sheet automatically, so your coach can read the
+        actual numbers instead of you sending screenshots. Paste the Web App URL from Apps Script below —
+        it stays on this device.
+      </div>
+      <input class="io" style="height:auto;min-height:0;padding:9px" id="syncurl" placeholder="https://script.google.com/macros/s/..../exec"
+        value="${(syncCfg.url||"").replace(/"/g,"&quot;")}" oninput="setSyncUrl(this.value)">
+      <div style="font-size:12px;margin-top:8px;color:${on?"var(--green,#4caf50)":"var(--dim)"}">
+        ${on ? (when ? `Connected · last sent ${when}${syncCfg.lastDay?` (${syncCfg.lastDay})`:""}` : "Connected · nothing sent yet") : "Not connected yet"}
+      </div>
+    </div>
+    <button class="btn" onclick="syncDay(iso(viewDate))">📊 Send today's workout to the sheet</button>
+    <button class="btn" onclick="syncAll()">📚 Send everything I've ever logged</button>`;
   return h;
 }
 function exportObj(){ return {v:2, logs:DB, plan:planEdits}; }
