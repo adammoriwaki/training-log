@@ -106,11 +106,12 @@ main{padding:8px 12px}
 .addset{background:none;border:1px dashed var(--line);color:var(--dim);border-radius:10px;padding:8px;width:100%;font-size:12.5px;margin-top:2px}
 .notes{width:100%;margin-top:9px;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:9px;font-size:13px;font-family:inherit;resize:none}
 .notes::placeholder{color:#5b6880}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,20,32,.97);border-top:1px solid var(--line);backdrop-filter:blur(8px);z-index:10}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0f1420;border-top:1px solid var(--line);z-index:10;transform:translateY(calc(-1 * var(--kb,0px)))}
+body.kb-open nav{visibility:hidden}
 nav button{flex:1;background:none;border:none;color:var(--dim);padding:11px 0 max(11px, env(safe-area-inset-bottom));font-size:10.5px;font-weight:600}
 nav button .ic{display:block;font-size:19px;margin-bottom:2px}
 nav button.on{color:var(--accent)}
-.timer{position:fixed;bottom:76px;left:12px;right:12px;background:var(--accent);color:#fff;border-radius:14px;padding:12px 16px;display:none;align-items:center;justify-content:space-between;z-index:9;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.timer{position:fixed;bottom:76px;transform:translateY(calc(-1 * var(--kb,0px)));left:12px;right:12px;background:var(--accent);color:#fff;border-radius:14px;padding:12px 16px;display:none;align-items:center;justify-content:space-between;z-index:9;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .timer.show{display:flex}
 .timer .t{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
 .timer button{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:7px 13px;font-weight:700;font-size:13px}
@@ -293,6 +294,11 @@ const LEVER = {
   "Pogos":
     "Progress stiffness and height, never load. Minimal ground contact time - think hot pavement."
 };
+function deloadWeek(){
+  var n = Math.min(Math.max(weekOf(viewDate),1),PLAN.weeks.length);
+  var w = PLAN.weeks.find(function(x){ return x.wk===n; });
+  return !!(w && w.dl);
+}
 function coachTip(it, last, targetSets){
   if(!last || !last.sets.length) return "";
   // no progression prompts on warm-ups, mobility or non-loadable work
@@ -306,6 +312,11 @@ function coachTip(it, last, targetSets){
   if(LEVER[it.ex]){
     const unit = isTimeBased(it.reps) ? "s" : " reps";
     return `<div class="coach">\u2b06 Progress the LEVERAGE, not the load \u2014 last: ${best}${unit}. ${LEVER[it.ex]}</div>`;
+  }
+  if(deloadWeek()){
+    const _u = isTimeBased(it.reps) ? "s" : " reps";
+    const _w = (last.sets.filter(s=>s.w!==""&&s.w!=null)[0]||{}).w;
+    return `<div class="coach">\u21a9 RETURN WEEK \u2014 do NOT chase the jump. Last time: ${_w?_w+" \u00d7 ":""}${best}${_u}. Repeat that weight at fewer sets, or go ~15% lighter, and leave 3 reps in the tank. Progression resumes when the plan says so.</div>`;
   }
   if(isTimeBased(it.reps)){
     return `<div class="coach">⬆ Beat ${best}s on at least one hold today.</div>`;
@@ -1247,6 +1258,26 @@ function doImport(){
 function alertMsg(m){ const pb=document.getElementById("phaseband"); pb.style.display="block"; pb.innerHTML="<b>"+m+"</b>"; setTimeout(render,1200); }
 
 render();
+
+// ---- iOS: keep the fixed bars pinned to the VISUAL viewport ----
+// When the soft keyboard opens, iOS shrinks the visual viewport. Fixed elements
+// anchored to bottom:0 end up stranded mid-page and often don't reflow when the
+// keyboard closes (worse when the element has a backdrop-filter, which promotes
+// it to its own compositing layer - that filter has been removed).
+(function(){
+  var vv = window.visualViewport;
+  if(!vv) return;
+  function fix(){
+    var hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--kb", hidden + "px");
+    document.body.classList.toggle("kb-open", hidden > 120);
+  }
+  vv.addEventListener("resize", fix);
+  vv.addEventListener("scroll", fix);
+  window.addEventListener("orientationchange", function(){ setTimeout(fix, 300); });
+  window.addEventListener("focusout", function(){ setTimeout(fix, 120); });
+  fix();
+})();
 </script>
 </body>
 </html>
