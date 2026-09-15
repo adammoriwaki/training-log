@@ -634,7 +634,17 @@ function runTypeFor(label){
   if(/shakeout/.test(L)) return "Shakeout";
   return "Easy";
 }
+function labelFor(dISO){
+  const d = parseISO(dISO);
+  const wk = Math.min(Math.max(weekOf(d),1),PLAN.weeks.length);
+  const t = dayPlan(wk, DAYS[(d.getDay()+6)%7]);
+  return t ? t.label : "";
+}
 function ensureRun(dISO, label){
+  // The label used to be passed in via an inline handler attribute; JSON.stringify put
+  // double quotes inside a double-quoted attribute and every handler was a syntax error -
+  // the run card never saved anything from the day it shipped. Derive it here instead.
+  if(label===undefined || label===null) label = labelFor(dISO);
   if(!DB[dISO]) DB[dISO]={};
   if(!DB[dISO].__run) DB[dISO].__run={type:runTypeFor(label),dist:"",time:"",hr:"",cad:"",cond:"",feel:"",
                                       reps:"",splits:"",tempoMi:"",tempoPace:"",half1:"",half2:"",note:""};
@@ -671,21 +681,21 @@ function runCard(dISO, label){
   if(cur.type==="Intervals"){
     extra = `<div class="setrow">
       <input class="cardio-in" placeholder="reps (e.g. 4 x 800)" value="${cur.reps||""}"
-             oninput="setRun('${dISO}','reps',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','reps',this.value)">
       <input class="cardio-in" placeholder="splits (3:41, 3:51, ...)" value="${cur.splits||""}"
-             oninput="setRun('${dISO}','splits',this.value,${JSON.stringify(label)})"></div>`;
+             oninput="setRun('${dISO}','splits',this.value)"></div>`;
   } else if(cur.type==="Tempo"){
     extra = `<div class="setrow">
       <input class="cardio-in" placeholder="tempo miles" value="${cur.tempoMi||""}"
-             oninput="setRun('${dISO}','tempoMi',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','tempoMi',this.value)">
       <input class="cardio-in" placeholder="tempo pace (8:45)" value="${cur.tempoPace||""}"
-             oninput="setRun('${dISO}','tempoPace',this.value,${JSON.stringify(label)})"></div>`;
+             oninput="setRun('${dISO}','tempoPace',this.value)"></div>`;
   } else if(cur.type==="Long"){
     extra = `<div class="setrow">
       <input class="cardio-in" placeholder="1st half time (opt)" value="${cur.half1||""}"
-             oninput="setRun('${dISO}','half1',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','half1',this.value)">
       <input class="cardio-in" placeholder="2nd half time (opt)" value="${cur.half2||""}"
-             oninput="setRun('${dISO}','half2',this.value,${JSON.stringify(label)})"></div>`;
+             oninput="setRun('${dISO}','half2',this.value)"></div>`;
   }
   let drift = "";
   if(cur.type==="Long" && cur.half1 && cur.half2){
@@ -696,30 +706,30 @@ function runCard(dISO, label){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <span class="ex-name">🏃 Run${logged?' <span class="chip">logged</span>':''}</span>
       <select class="cardio-in" style="flex:0 0 auto;width:120px;height:34px"
-              onchange="setRunType('${dISO}',this.value,${JSON.stringify(label)})">
+              onchange="setRunType('${dISO}',this.value)">
         ${RUN_TYPES.map(x=>`<option ${x===cur.type?"selected":""}>${x}</option>`).join("")}
       </select>
     </div>
     <div class="setrow">
       <input class="cardio-in" inputmode="decimal" placeholder="miles" value="${cur.dist||""}"
-             oninput="setRun('${dISO}','dist',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','dist',this.value)">
       <input class="cardio-in" placeholder="time (48:32)" value="${cur.time||""}"
-             oninput="setRun('${dISO}','time',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','time',this.value)">
       <input class="cardio-in" inputmode="numeric" placeholder="avg HR" value="${cur.hr||""}"
-             oninput="setRun('${dISO}','hr',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','hr',this.value)">
     </div>
     <div class="setrow">
       <input class="cardio-in" inputmode="numeric" placeholder="cadence (spm)" value="${cur.cad||""}"
-             oninput="setRun('${dISO}','cad',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','cad',this.value)">
       <input class="cardio-in" placeholder="temp / dew pt (72 / 58)" value="${cur.cond||""}"
-             oninput="setRun('${dISO}','cond',this.value,${JSON.stringify(label)})">
+             oninput="setRun('${dISO}','cond',this.value)">
     </div>
     ${extra}
     ${pace?`<div class="coach">${pace}/mi</div>`:""}
     ${drift}
     <textarea class="cardio-in" style="width:100%;height:44px;padding:8px 10px;margin-top:8px"
       placeholder="how it felt, sleep, anything notable..."
-      oninput="setRun('${dISO}','note',this.value,${JSON.stringify(label)})">${cur.note||""}</textarea>
+      oninput="setRun('${dISO}','note',this.value)">${cur.note||""}</textarea>
     ${logged?`<div style="text-align:right;margin-top:6px"><span style="font-size:11.5px;color:var(--dim);cursor:pointer" onclick="clearRun('${dISO}')">clear run</span></div>`:""}
   </div>`;
 }
