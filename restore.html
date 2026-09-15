@@ -1,0 +1,94 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Restore backup</title>
+<style>
+  :root{ color-scheme: dark; }
+  body{margin:0;background:#0b0f1a;color:#e8ecf4;
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       padding:20px 16px 40px;max-width:640px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:#8b93a7;font-size:13px;margin-bottom:18px}
+  button{width:100%;padding:16px;font-size:16px;font-weight:700;border:0;border-radius:12px;
+         background:#2f6fed;color:#fff;margin:6px 0}
+  button.sec{background:#1b2233;color:#cfd6e6}
+  #msg{margin:12px 0;padding:13px 15px;border-radius:12px;font-weight:700;font-size:14px;display:none}
+  ol{padding-left:22px;margin:18px 0 0}
+  li{margin-bottom:9px;font-size:14px;color:#cfd6e6}
+  textarea{width:100%;height:120px;margin-top:14px;background:#111726;color:#8b93a7;
+           border:1px solid #232c40;border-radius:10px;padding:10px;font-size:11px;
+           font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .stat{font-size:13px;color:#8b93a7;margin-top:10px}
+  code{background:#1b2233;padding:2px 5px;border-radius:4px;font-size:12.5px}
+</style>
+
+<h1>Restore your training log</h1>
+<div class="sub">Rebuilt from your Google Sheet — 8 sessions, every set.</div>
+
+<button id="copy">Copy backup to clipboard</button>
+<div id="msg"></div>
+<div class="stat" id="stat">Loading backup…</div>
+
+<ol>
+  <li>Tap <b>Copy backup to clipboard</b> above.</li>
+  <li>Open your <b>運動</b> app from the home screen.</li>
+  <li>Go to the <b>Data</b> tab and scroll to the big empty box under Import.</li>
+  <li>Tap the box, <b>Paste</b>, then tap <b>Import</b>.</li>
+  <li>Check Monday — Bench Press should read <code>35×10, 40×10, 40×10</code>.</li>
+</ol>
+
+<textarea id="raw" readonly placeholder="backup will appear here"></textarea>
+<button class="sec" id="selectall">Select all (if Copy didn't work)</button>
+
+<script>
+var TEXT = "";
+function show(m, ok){
+  var el = document.getElementById("msg");
+  el.textContent = m;
+  el.style.display = "block";
+  el.style.background = ok ? "#1d6f42" : "#8c2b2b";
+  el.style.color = "#fff";
+}
+fetch("restore.json?t=" + Date.now(), {cache:"no-store"})
+  .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+  .then(function(t){
+    TEXT = t;
+    document.getElementById("raw").value = t;
+    var o = JSON.parse(t), days = Object.keys(o.logs).length;
+    var sets = 0;
+    Object.keys(o.logs).forEach(function(d){
+      Object.keys(o.logs[d]).forEach(function(k){
+        if(k.indexOf("__") === 0) return;
+        sets += (o.logs[d][k].sets || []).length;
+      });
+    });
+    document.getElementById("stat").textContent =
+      days + " days · " + sets + " sets · " + t.length.toLocaleString() + " bytes ready";
+  })
+  .catch(function(e){
+    document.getElementById("stat").textContent = "";
+    show("Couldn't load the backup — " + e.message, false);
+  });
+
+document.getElementById("copy").addEventListener("click", function(){
+  if(!TEXT){ show("Backup hasn't loaded yet — wait a second and try again.", false); return; }
+  function fallback(){
+    var t = document.getElementById("raw");
+    t.focus(); t.setSelectionRange(0, t.value.length);
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch(e) { ok = false; }
+    show(ok ? "Copied ✓ — now paste it into the app's Import box"
+            : "Couldn't copy automatically. Tap Select all below, then hold and choose Copy.", ok);
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(TEXT).then(function(){
+      show("Copied ✓ — now paste it into the app's Import box", true);
+    }).catch(fallback);
+  } else { fallback(); }
+});
+
+document.getElementById("selectall").addEventListener("click", function(){
+  var t = document.getElementById("raw");
+  t.focus(); t.setSelectionRange(0, t.value.length);
+  show("Selected — hold on the highlighted text and choose Copy.", true);
+});
+</script>
