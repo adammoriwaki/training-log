@@ -1168,9 +1168,10 @@ function renderData(){
   let h = `<h2>Your data</h2>`;
   if(!canStore) h += `<div class="warn"><b>Heads up:</b> this browser doesn't allow saved storage, so logs live only while this page is open. Export below before closing, and paste back in next time (or open this file from your phone's Files app / a real browser tab where saving works).</div>`;
   else h += `<div class="card" style="font-size:13px;color:var(--dim)">Logs are saved on this device automatically (${n} day${n===1?"":"s"} logged). Export a backup every week or two — phones clear browser storage sometimes.</div>`;
-  h += `<button class="btn" onclick="location.reload()">🔄 Reload app (get latest version)</button>
+  h += `<button class="btn" onclick="hardReload()">🔄 Reload app (get latest version)</button>
     <button class="btn primary" onclick="doExport()">📤 Export backup</button>
     <button class="btn" onclick="restoreFromRepo()">⤵️ Restore from cloud backup</button>
+    ${window.__restoreMsg?`<div class="card" style="font-size:13px"><b>${window.__restoreMsg}</b></div>`:""}
     <button class="btn" onclick="doCopy()">📋 Copy backup to clipboard</button>
     <div style="margin:14px 4px 6px;font-size:12px;color:var(--dim)">Restore: paste a backup below</div>
     <textarea class="io" id="io" placeholder='{"2026-07-27": ...}'></textarea>
@@ -1212,6 +1213,12 @@ async function doExport(){
 }
 // Recovery hatch: pulls restore.json from this app's own folder and MERGES it in.
 // Object.assign per day, same semantics as doImport - never clobbers newer entries.
+// A plain location.reload() is served from cache in an iOS home-screen app, so the
+// "get latest version" button did nothing. Bounce through a fresh query string instead.
+function hardReload(){
+  const u = location.pathname + "?v=" + Date.now();
+  location.replace(u);
+}
 async function restoreFromRepo(){
   try{
     const res = await fetch("restore.json?t="+Date.now(), {cache:"no-store"});
@@ -1221,8 +1228,9 @@ async function restoreFromRepo(){
     let n = 0;
     Object.keys(logs).forEach(d=>{ DB[d] = Object.assign(DB[d]||{}, logs[d]); n++; });
     if(obj && obj.v===2 && obj.plan){ Object.assign(planEdits, obj.plan); savePlanEdits(); }
-    saveDB(DB); alertMsg("Restored " + n + " days \u2713"); render();
-  }catch(e){ alertMsg("Restore failed \u2014 " + (e.message || e)); }
+    saveDB(DB); window.__restoreMsg = "Restored " + n + " days \u2713 (" + Object.keys(DB).length + " total on this device)";
+    alertMsg(window.__restoreMsg); render();
+  }catch(e){ window.__restoreMsg = "Restore FAILED \u2014 " + (e.message || e); alertMsg(window.__restoreMsg); render(); }
 }
 function doCopy(){
   const t = JSON.stringify(exportObj());
@@ -1238,7 +1246,27 @@ function doImport(){
     saveDB(DB); alertMsg("Imported ✓"); render();
   }catch(e){ alertMsg("Couldn't parse that — is it the full JSON?"); }
 }
-function alertMsg(m){ const pb=document.getElementById("phaseband"); pb.style.display="block"; pb.innerHTML="<b>"+m+"</b>"; setTimeout(render,1200); }
+function alertMsg(m){
+  // NOTE: this used to write into #phaseband, which render() force-hides on the data,
+  // history, summary and editor tabs - so confirmations were invisible exactly where
+  // the buttons live. Independent toast element; render() never touches it.
+  let t = document.getElementById("toast");
+  if(!t){
+    t = document.createElement("div"); t.id = "toast";
+    t.style.cssText = "position:fixed;left:12px;right:12px;bottom:92px;z-index:50;"
+      + "background:#1d6f42;color:#fff;padding:13px 15px;border-radius:12px;"
+      + "font-size:13.5px;font-weight:700;text-align:center;line-height:1.4;"
+      + "box-shadow:0 10px 28px rgba(0,0,0,.55);"
+      + "transform:translateY(calc(-1 * var(--kb,0px)))";
+    document.body.appendChild(t);
+  }
+  t.textContent = m;
+  t.style.background = /fail|couldn|error/i.test(m) ? "#8c2b2b" : "#1d6f42";
+  t.style.display = "block";
+  clearTimeout(window.__toastT);
+  window.__toastT = setTimeout(()=>{ t.style.display = "none"; }, 3500);
+  setTimeout(render, 1200);
+}
 
 render();
 
