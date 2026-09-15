@@ -1227,6 +1227,16 @@ async function restoreFromRepo(){
     const logs = (obj && obj.v===2 && obj.logs) ? obj.logs : obj;
     let n = 0;
     Object.keys(logs).forEach(d=>{ DB[d] = Object.assign(DB[d]||{}, logs[d]); n++; });
+    // Purge malformed entries: a real entry is keyed by its exercise NAME and has no "ex"
+    // field. An entry carrying ex !== key is junk from an earlier, wrongly-shaped restore.
+    Object.keys(DB).forEach(d=>{
+      const day = DB[d]; if(!day || typeof day!=="object") return;
+      Object.keys(day).forEach(k=>{
+        if(k.startsWith("__")) return;
+        const e = day[k];
+        if(e && typeof e==="object" && e.ex && e.ex !== k) delete day[k];
+      });
+    });
     if(obj && obj.v===2 && obj.plan){ Object.assign(planEdits, obj.plan); savePlanEdits(); }
     saveDB(DB); window.__restoreMsg = "Restored " + n + " days \u2713 (" + Object.keys(DB).length + " total on this device)";
     alertMsg(window.__restoreMsg); render();
